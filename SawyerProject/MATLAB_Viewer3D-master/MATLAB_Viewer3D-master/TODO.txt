@@ -1,0 +1,5 @@
+Questions
+
+1.	+Viewer3D\+Primitives\@Path\Path.m
+	
+	function setAxesViewFactor - unable to manipulate properties of each axes (line group) 

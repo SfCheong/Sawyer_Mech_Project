@@ -1,0 +1,8 @@
+Todo list:
+
+1. Show Warning dialogue is loaded .mat file is empty
+2. Show warning dialogue is appended data is not double
+3. data in data list arrange alphabetically
+4. If appended data is repeated, warning dialogue is shown for replace or rename
+5. Input text box for change x-axis of graph and it must be in number datatype
+6. combine plot with ori_data
