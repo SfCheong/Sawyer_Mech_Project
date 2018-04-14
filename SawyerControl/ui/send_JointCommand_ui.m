@@ -1,0 +1,327 @@
+function varargout = send_JointCommand_ui(varargin)
+% SEND_JOINTCOMMAND_UI MATLAB code for send_JointCommand_ui.fig
+%      SEND_JOINTCOMMAND_UI, by itself, creates a new SEND_JOINTCOMMAND_UI or raises the existing
+%      singleton*.
+%
+%      H = SEND_JOINTCOMMAND_UI returns the handle to a new SEND_JOINTCOMMAND_UI or the handle to
+%      the existing singleton*.
+%
+%      SEND_JOINTCOMMAND_UI('CALLBACK',hObject,eventData,handles,...) calls the local
+%      function named CALLBACK in SEND_JOINTCOMMAND_UI.M with the given input arguments.
+%
+%      SEND_JOINTCOMMAND_UI('Property','Value',...) creates a new SEND_JOINTCOMMAND_UI or raises the
+%      existing singleton*.  Starting from the left, property value pairs are
+%      applied to the GUI before send_JointCommand_ui_OpeningFcn gets called.  An
+%      unrecognized property name or invalid value makes property application
+%      stop.  All inputs are passed to send_JointCommand_ui_OpeningFcn via varargin.
+%
+%      *See GUI Options on GUIDE's Tools menu.  Choose "GUI allows only one
+%      instance to run (singleton)".
+%
+% See also: GUIDE, GUIDATA, GUIHANDLES
+
+% Edit the above text to modify the response to help send_JointCommand_ui
+
+% Last Modified by GUIDE v2.5 08-Apr-2018 14:46:35
+
+% Begin initialization code - DO NOT EDIT
+gui_Singleton = 1;
+gui_State = struct('gui_Name',       mfilename, ...
+                   'gui_Singleton',  gui_Singleton, ...
+                   'gui_OpeningFcn', @send_JointCommand_ui_OpeningFcn, ...
+                   'gui_OutputFcn',  @send_JointCommand_ui_OutputFcn, ...
+                   'gui_LayoutFcn',  [] , ...
+                   'gui_Callback',   []);
+if nargin && ischar(varargin{1})
+    gui_State.gui_Callback = str2func(varargin{1});
+end
+
+if nargout
+    [varargout{1:nargout}] = gui_mainfcn(gui_State, varargin{:});
+else
+    gui_mainfcn(gui_State, varargin{:});
+end
+
+function send_JointCommand_ui_OpeningFcn(hObject, eventdata, handles, varargin)
+global command;
+command = Sawyer.JointInterface;
+set(handles.filePath,'String','File Path');
+set(handles.joint_radioButton,'Enable','off');
+set(handles.cartesian_radioButton,'Enable','off');
+set(handles.vel_radioButton,'Enable','off');
+set(handles.torque_radioButton,'Enable','off');
+set(handles.send_button,'Enable','off');
+handles.output = hObject;
+guidata(hObject, handles);
+
+function varargout = send_JointCommand_ui_OutputFcn(~, eventdata, handles) 
+varargout{1} = handles.output;
+
+%Load path for continuous motion: Available path is saved in folder "data" 
+function load_button_Callback(hObject, eventdata, handles)
+global traj;
+global pathName;
+[fileName, pathName] = uigetfile('*.mat','Select path for continuous motion');
+jointStateList       = load(fileName);
+set(handles.filePath,'String',pathName);
+traj                 = Sawyer.Trajectory(fileName,jointStateList);
+traj.JointStateList  = traj.JointStateList.jointStateList;
+fdname  = string(fieldnames(traj.JointStateList));
+strfind(fdname(:),'velocity')
+%Available position and velocity array for motion is divided into 2
+%pop-menu for selection
+nofield = size(fdname,1);
+p       =1;
+q       =1;
+for i=1:nofield
+    if strfind(fdname(i),'position')
+        selected_pos(p)= fdname(i);
+        p              = p+1;
+    end
+    if strfind(fdname(i),'velocity')==1
+        selected_vel(q)= fdname(i);
+        q              = q+1;
+    end
+end
+filePath = get(handles.filePath,'String');
+if strcmp(filePath, 'File Path')
+    set(handles.send_button,'Enable','off');
+else
+    set(handles.send_button,'Enable','on');
+end
+set(handles.pos_option,'String',selected_pos);
+set(handles.vel_option,'String',selected_vel);
+
+%Send joint command to Sawyer for continuous motion
+function send_button_Callback(hObject, eventdata, handles)
+global command;
+global pathName;
+global traj;
+%Read user's selection: controller interface, mode, pos and vel array
+selected_interface = get(handles.pos_radioButton,'Enable');
+selected_m_mode    = get(handles.motion_button_group,'SelectedObject');
+selected_j_mode    = get(handles.joint_button_group,'SelectedObject');
+selected_pos_name  = get(handles.pos_option,'String');
+selected_pos       = traj.JointStateList.(selected_pos_name);
+selected_vel_name  = get(handles.vel_option,'String');
+selected_vel       = traj.JointStateList.(selected_vel_name);
+if strcmp(selected_interface,'on')
+    switch selected_j_mode.String
+    case 'Position Mode'
+        command.setMode(1);
+    case 'Trajectory Mode'
+        command.setMode(2);
+    case 'Velocity Mode'
+        command.setMode(3);
+        errordlg('Velocity Mode still not available');
+    case 'Torque Mode'
+        command.setMode(4)
+        errordlg('Torque Mode still not available');
+    end
+else
+    if strcmp(selected_m_mode.String,'Joint Mode')
+        run sendAction.m;
+        mode = 'Joint Mode'
+    else
+        run sendAction.m;
+        mode = 'Cartesian Mode'
+    end
+end
+
+%Read current state of 7 joints
+function readJoint_button_Callback(hObject, eventdata, handles)
+global command;
+joints_pos = command.getJointStatus();
+joints_pos = round(rad2deg(joints_pos),2);
+set(handles.pos_j01,'string',joints_pos(1));
+set(handles.pos_j02,'string',joints_pos(2));
+set(handles.pos_j03,'string',joints_pos(3));
+set(handles.pos_j04,'string',joints_pos(4));
+set(handles.pos_j05,'string',joints_pos(5));
+set(handles.pos_j06,'string',joints_pos(6));
+set(handles.pos_j07,'string',joints_pos(7));
+
+%Send desired joints' angle to Sawyer
+function sendJoint_button_Callback(hObject, eventdata, handles)
+global command;
+selected_j_mode    = get(handles.joint_button_group,'SelectedObject');
+if strcmp(selected_j_mode.String,'Position Mode')
+    command.setMode('POSITIONMODE');
+else
+    command.setMode('TRAJECTORYMODE');
+end
+p1 = deg2rad(str2num(get(handles.send_j01,'string')));
+p2 = deg2rad(str2num(get(handles.send_j02,'string')));
+p3 = deg2rad(str2num(get(handles.send_j03,'string')));
+p4 = deg2rad(str2num(get(handles.send_j04,'string')));
+p5 = deg2rad(str2num(get(handles.send_j05,'string')));
+p6 = deg2rad(str2num(get(handles.send_j06,'string')));
+p7 = deg2rad(str2num(get(handles.send_j07,'string')));
+pos_array = [p1,p2,p3,p4,p5,p6,p7] 
+command.setJointAngle(pos_array);
+command.goalMsg
+
+%=============================Checkbox====================================%
+function Interface_checkbox_Callback(hObject, eventdata, handles)
+interface_opt = get(handles.Interface_checkbox,'value');
+if interface_opt == 1
+    set(handles.Traj_radioButton,'Enable','off');
+    set(handles.pos_radioButton,'Enable','off');
+    set(handles.vel_radioButton,'Enable','off');
+    set(handles.torque_radioButton,'Enable','off');
+    set(handles.joint_radioButton,'Enable','on');
+    set(handles.cartesian_radioButton,'Enable','on');
+else
+    set(handles.Traj_radioButton,'Enable','on');
+    set(handles.pos_radioButton,'Enable','on');
+    set(handles.vel_radioButton,'Enable','on');
+    set(handles.torque_radioButton,'Enable','on');
+    set(handles.joint_radioButton,'Enable','off');
+    set(handles.cartesian_radioButton,'Enable','off');
+end
+handles.output = hObject;
+guidata(hObject, handles);
+
+%==========================Edit Text======================================%
+function filePath_Callback(hObject, eventdata, handles)
+
+function filePath_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function pos_j01_Callback(hObject, eventdata, handles)
+function pos_j01_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function pos_j02_Callback(hObject, eventdata, handles)
+function pos_j02_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function pos_j03_Callback(hObject, eventdata, handles)
+function pos_j03_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function pos_j04_Callback(hObject, eventdata, handles)
+function pos_j04_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function pos_j05_Callback(hObject, eventdata, handles)
+function pos_j05_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function pos_j06_Callback(hObject, eventdata, handles)
+function pos_j06_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function pos_j07_Callback(hObject, eventdata, handles)
+function pos_j07_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function send_j01_Callback(hObject, eventdata, handles)
+function send_j01_CreateFcn(hObject, eventdata, handles)
+
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function send_j07_Callback(hObject, eventdata, handles)
+function send_j07_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function send_j06_Callback(hObject, eventdata, handles)
+function send_j06_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function send_j05_Callback(hObject, eventdata, handles)
+function send_j05_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function send_j03_Callback(hObject, eventdata, handles)
+function send_j03_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function send_j02_Callback(hObject, eventdata, handles)
+function send_j02_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function send_j04_Callback(hObject, eventdata, handles)
+function send_j04_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+%==========================Radio button======================================%
+function conti_radio_button_Callback(hObject, eventdata, handles)
+set(handles.vel_radioButton,'Enable','on');
+set(handles.torque_radioButton,'Enable','on');
+
+function simple_radio_button_Callback(hObject, eventdata, handles)
+set(handles.send_button,'Enable','off');
+set(handles.vel_radioButton,'Enable','off');
+set(handles.torque_radioButton,'Enable','off');
+
+function mode_button_group_SelectionChangedFcn(hObject, eventdata, handles)
+filePath = get(handles.filePath,'string');
+selected_mode    = get(handles.mode_button_group,'SelectedObject');
+selected_mode    = selected_mode.String;
+if strcmp(selected_mode,'Simple Mode')
+    set(handles.joint_radioButton,'Enable','off');
+    set(handles.cartesian_radioButton,'Enable','off');    
+    set(handles.readJoint_button,'Enable','on');
+    set(handles.sendJoint_button,'Enable','on');
+else
+    set(handles.readJoint_button,'Enable','off');
+    set(handles.sendJoint_button,'Enable','off');
+    if strcmp(filePath, 'File Path')
+    set(handles.send_button,'Enable','off');
+    else
+    set(handles.send_button,'Enable','on');
+    end
+end
+
+function joint_button_group_SelectionChangedFcn(hObject, eventdata, handles)
+
+function motion_button_group_SelectionChangedFcn(hObject, eventdata, handles)
+filePath = get(handles.filePath,'string')
+if strcmp(filePath, 'File Path')
+    set(handles.send_button,'Enable','off');
+else
+    set(handles.send_button,'Enable','on');
+end
+%=========================Pop Up Menu=======================================%
+function pos_option_Callback(hObject, eventdata, handles)
+function pos_option_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function vel_option_Callback(hObject, eventdata, handles)
+function vel_option_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
